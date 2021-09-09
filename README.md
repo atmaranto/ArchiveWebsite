@@ -1,5 +1,5 @@
 # ArchiveWebsite
- A simple Python script that uses BeautifulSoup and savepagenow to archive entire websites.
+ A simple Python script that uses BeautifulSoup and savepagenow to archive entire websites with archive.org.
 
 ## Usage
 
