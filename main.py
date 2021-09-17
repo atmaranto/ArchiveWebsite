@@ -9,22 +9,24 @@ import time
 from urllib.parse import urlparse, urljoin
 from urllib.request import urlopen, Request
 
+USER_AGENT = "WebsiteArchiver/1.0 (Preserves websites on archive.org)"
+
 def BeautifulSoup(*args, **kwargs):
 	return SoupBase(*args, features='lxml', **kwargs)
 
-def try_request(url, retries, log):
+def try_request(url, retries, log, user_agent):
 	for i in range(retries):
 		if i > 0:
 			log("Retrying in:")
 			for j in range(3, 0, -1):
 				log(j)
-				time.sleep(j)
+				time.sleep(1)
 			log("Retrying (" + str(retries - i - 1) + " left)")
 		
 		log("Requesting", url)
 		
 		try:
-			page = urlopen(url)
+			page = urlopen(Request(url, headers={"User-Agent": user_agent}))
 		except Exception as e:
 			log("Encountered", repr(e))
 			continue
@@ -33,7 +35,7 @@ def try_request(url, retries, log):
 	
 	return None
 
-def archivePage(url, log, ignore_523=False):
+def archivePage(url, log, ignore_523=False, ):
 	while True:
 		try:
 			log(savepagenow.capture(url))
@@ -59,7 +61,7 @@ def archivePage(url, log, ignore_523=False):
 	
 	return True
 
-def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore_523=False, quiet=False):
+def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore_523=False, quiet=False, user_agent=USER_AGENT):
 	log = (lambda *args, **kwargs: None) if quiet else print
 	
 	stack = [base_url]
@@ -70,7 +72,7 @@ def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore_523
 	
 	while stack:
 		page_url = stack.pop(-1)
-		page = try_request(page_url, retries, log)
+		page = try_request(page_url, retries, log, user_agent)
 		
 		if not page:
 			log("Failed to request page after", retries, "tries")
