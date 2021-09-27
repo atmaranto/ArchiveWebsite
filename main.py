@@ -5,7 +5,7 @@ from savepagenow.exceptions import CachedPage, WaybackRuntimeError
 
 import requests
 
-import time
+import time, re
 from urllib.parse import urlparse, urljoin
 from urllib.request import urlopen, Request
 
@@ -36,7 +36,7 @@ def try_request_soup(url, retries, log, user_agent):
 	
 	return None
 
-def archivePage(url, log, ignore_523=False, ):
+def archivePage(url, log, ignore=[]):
 	while True:
 		try:
 			log(savepagenow.capture(url))
@@ -44,8 +44,9 @@ def archivePage(url, log, ignore_523=False, ):
 			log(url, "already cached")
 			break
 		except WaybackRuntimeError as e:
-			if e.args[0].get("status_code") == 523 and ignore_523:
-				log("Error 523 when requesting page.")
+			status_code = e.args[0].get("status_code")
+			if status_code in ignore:
+				log(f"Error {status_code} when requesting page.")
 				return False
 			
 			log("Encountered", repr(e))
@@ -62,7 +63,7 @@ def archivePage(url, log, ignore_523=False, ):
 	
 	return True
 
-def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore_523=False, quiet=False, verbose=False, dry_run=False, user_agent=USER_AGENT):
+def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore=[], quiet=False, verbose=False, dry_run=False, user_agent=USER_AGENT):
 	log = (lambda *args, **kwargs: None) if quiet else print
 	
 	stack = [base_url]
@@ -98,7 +99,7 @@ def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore_523
 					
 					if skip_done:
 						log(f"({i+1}/{len(all_tags)}): Archiving", url)
-						if not dry_run: archivePage(url, log, ignore_523=ignore_523)
+						if not dry_run: archivePage(url, log, ignore=ignore)
 						log(f"({i+1}/{len(all_tags)}): Archived.")
 					
 					done.add(url)
@@ -122,11 +123,15 @@ if __name__ == "__main__":
 	ap.add_argument("--index-page", "-i", action="store_true", help="Uses the base-url as an \"index page\": all links are downloaded, but none are stepped into with any depth")
 	ap.add_argument("--retries", "-r", type=int, default=3, help="The number of retries before giving up on a URL")
 	ap.add_argument("--skip-to", "-s", default=None, help="A partial end to a path to skip to before we actually start archiving")
-	ap.add_argument("--ignore-523", action="store_true", help="Ignore 523 (Origin is Unreachable) errors produced by the Wayback Machine")
+	ap.add_argument("--ignore", "-I", type=str, default="", help="Comma-separated list of HTTP error codes to ignore from the Wayback Machine.")
 	ap.add_argument("--quiet", "-q", action="store_true", help="Suppresses most output")
 	ap.add_argument("--verbose", "-v", action="store_true", help="Enables verbose output")
 	ap.add_argument("--dry-run", "-d", action="store_true", help="Doesn't actually archive the URLs")
 	
 	args = ap.parse_args()
 	
-	archiveWebsite(args.base_url, as_index=args.index_page, retries=args.retries, skip_to=args.skip_to, ignore_523=args.ignore_523, quiet=args.quiet, verbose=args.verbose, dry_run=args.dry_run)
+	ignore = args.ignore.strip()
+	assert not ignore or re.match(r"^\d+(,\d+)*$", ignore), "If specified, --ignore lists must be comma-separated values of integer error codes."
+	ignore = [int(code) for code in ignore.split(",")] if ignore else []
+	
+	archiveWebsite(args.base_url, as_index=args.index_page, retries=args.retries, skip_to=args.skip_to, ignore=ignore, quiet=args.quiet, verbose=args.verbose, dry_run=args.dry_run)
