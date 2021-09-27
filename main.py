@@ -14,7 +14,7 @@ USER_AGENT = "WebsiteArchiver/1.0 (Preserves websites on archive.org)"
 def BeautifulSoup(*args, **kwargs):
 	return SoupBase(*args, features='lxml', **kwargs)
 
-def try_request(url, retries, log, user_agent):
+def try_request_soup(url, retries, log, user_agent):
 	for i in range(retries):
 		if i > 0:
 			log("Retrying in:")
@@ -27,11 +27,12 @@ def try_request(url, retries, log, user_agent):
 		
 		try:
 			page = urlopen(Request(url, headers={"User-Agent": user_agent}))
+			soup = BeautifulSoup(page.read())
 		except Exception as e:
 			log("Encountered", repr(e))
 			continue
 		
-		return page
+		return soup
 	
 	return None
 
@@ -61,7 +62,7 @@ def archivePage(url, log, ignore_523=False, ):
 	
 	return True
 
-def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore_523=False, quiet=False, user_agent=USER_AGENT):
+def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore_523=False, quiet=False, verbose=False, dry_run=False, user_agent=USER_AGENT):
 	log = (lambda *args, **kwargs: None) if quiet else print
 	
 	stack = [base_url]
@@ -72,33 +73,32 @@ def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore_523
 	
 	while stack:
 		page_url = stack.pop(-1)
-		page = try_request(page_url, retries, log, user_agent)
+		soup = try_request_soup(page_url, retries, log, user_agent)
 		
-		if not page:
+		if not soup:
 			log("Failed to request page after", retries, "tries")
 			
 			continue
 		
-		soup = BeautifulSoup(page.read())
 		all_tags = soup.find_all("a", href=True)
 		
 		for i, tag in enumerate(all_tags):
-			url = tag["href"]
+			url = urljoin(base_url, tag["href"])
 			parsed = urlparse(url)
 			
 			if not parsed.netloc or parsed.netloc == base_url_parse.netloc:
-				url = urljoin(base_url, url)
+				url = url.split("#", 1)[0]
 				
 				if not url in done:
 					if not skip_done:
-						if parsed.path.endswith(skip_to):
+						if parsed.path.strip("/").endswith(skip_to.strip("/")):
 							skip_done = True
 						else:
 							log("Skipped", url)
 					
 					if skip_done:
 						log(f"({i+1}/{len(all_tags)}): Archiving", url)
-						archivePage(url, log, ignore_523=ignore_523)
+						if not dry_run: archivePage(url, log, ignore_523=ignore_523)
 						log(f"({i+1}/{len(all_tags)}): Archived.")
 					
 					done.add(url)
@@ -106,8 +106,11 @@ def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore_523
 					if not as_index and parsed.path.startswith(base_url_parse.path):
 						log("Added", url, "to stack")
 						stack.append(url)
-			else:
-				log("Did not archive external link:", url)
+					else:
+						if verbose:
+							log("Did not add", url, "to stack")
+			#else:
+				#log("Did not archive external link:", url)
 		log("Completed archiving of URL", page_url)
 
 if __name__ == "__main__":
@@ -121,7 +124,9 @@ if __name__ == "__main__":
 	ap.add_argument("--skip-to", "-s", default=None, help="A partial end to a path to skip to before we actually start archiving")
 	ap.add_argument("--ignore-523", action="store_true", help="Ignore 523 (Origin is Unreachable) errors produced by the Wayback Machine")
 	ap.add_argument("--quiet", "-q", action="store_true", help="Suppresses most output")
+	ap.add_argument("--verbose", "-v", action="store_true", help="Enables verbose output")
+	ap.add_argument("--dry-run", "-d", action="store_true", help="Doesn't actually archive the URLs")
 	
 	args = ap.parse_args()
 	
-	archiveWebsite(args.base_url, as_index=args.index_page, retries=args.retries, skip_to=args.skip_to, ignore_523=args.ignore_523, quiet=args.quiet)
+	archiveWebsite(args.base_url, as_index=args.index_page, retries=args.retries, skip_to=args.skip_to, ignore_523=args.ignore_523, quiet=args.quiet, verbose=args.verbose, dry_run=args.dry_run)
