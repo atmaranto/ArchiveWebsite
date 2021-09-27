@@ -36,8 +36,9 @@ def try_request_soup(url, retries, log, user_agent):
 	
 	return None
 
-def archivePage(url, log, ignore=[]):
-	while True:
+def archivePage(url, log, ignore=[], retries=3):
+	tries = 0
+	while tries < retries:
 		try:
 			log(savepagenow.capture(url))
 		except CachedPage as e:
@@ -45,11 +46,16 @@ def archivePage(url, log, ignore=[]):
 			break
 		except WaybackRuntimeError as e:
 			status_code = e.args[0].get("status_code")
-			if status_code in ignore:
+			if ignore == "any" or status_code in ignore:
 				log(f"Error {status_code} when requesting page.")
 				return False
 			
-			log("Encountered", repr(e))
+			tries += 1
+			log(f"(Try {tries}/{retries}) Encountered", repr(e))
+			
+			if tries >= retries:
+				return False
+			
 			log("Sleeping for 60 seconds")
 			time.sleep(60)
 		except requests.exceptions.ConnectionError as e:
@@ -90,7 +96,7 @@ def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore=[],
 			if not parsed.netloc or parsed.netloc == base_url_parse.netloc:
 				url = url.split("#", 1)[0]
 				
-				if not url in done:
+				if url not in done:
 					if not skip_done:
 						if parsed.path.strip("/").endswith(skip_to.strip("/")):
 							skip_done = True
@@ -101,7 +107,7 @@ def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore=[],
 						log(f"({i+1}/{len(all_tags)}): Archiving", url)
 						
 						if not dry_run:
-							success = archivePage(url, log, ignore=ignore)
+							success = archivePage(url, log, ignore=ignore, retries=retries)
 						else:
 							success = True
 						
@@ -131,7 +137,7 @@ if __name__ == "__main__":
 	ap.add_argument("--index-page", "-i", action="store_true", help="Uses the base-url as an \"index page\": all links are downloaded, but none are stepped into with any depth")
 	ap.add_argument("--retries", "-r", type=int, default=3, help="The number of retries before giving up on a URL")
 	ap.add_argument("--skip-to", "-s", default=None, help="A partial end to a path to skip to before we actually start archiving")
-	ap.add_argument("--ignore", "-I", type=str, default="", help="Comma-separated list of HTTP error codes to ignore from the Wayback Machine.")
+	ap.add_argument("--ignore", "-I", type=str, default="", help="Comma-separated list of HTTP error codes to ignore from the Wayback Machine. Specifying \"any\" will ignore all error codes from the Wayback Machine.")
 	ap.add_argument("--quiet", "-q", action="store_true", help="Suppresses most output")
 	ap.add_argument("--verbose", "-v", action="store_true", help="Enables verbose output")
 	ap.add_argument("--dry-run", "-d", action="store_true", help="Doesn't actually archive the URLs")
@@ -139,7 +145,9 @@ if __name__ == "__main__":
 	args = ap.parse_args()
 	
 	ignore = args.ignore.strip()
-	assert not ignore or re.match(r"^\d+(,\d+)*$", ignore), "If specified, --ignore lists must be comma-separated values of integer error codes."
-	ignore = [int(code) for code in ignore.split(",")] if ignore else []
+	
+	if ignore != "any":
+		assert not ignore or re.match(r"^\d+(,\d+)*$", ignore), "If specified, --ignore lists must be comma-separated values of integer error codes."
+		ignore = [int(code) for code in ignore.split(",")] if ignore else []
 	
 	archiveWebsite(args.base_url, as_index=args.index_page, retries=args.retries, skip_to=args.skip_to, ignore=ignore, quiet=args.quiet, verbose=args.verbose, dry_run=args.dry_run)
