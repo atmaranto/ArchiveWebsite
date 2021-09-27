@@ -99,8 +99,16 @@ def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore=[],
 					
 					if skip_done:
 						log(f"({i+1}/{len(all_tags)}): Archiving", url)
-						if not dry_run: archivePage(url, log, ignore=ignore)
-						log(f"({i+1}/{len(all_tags)}): Archived.")
+						
+						if not dry_run:
+							success = archivePage(url, log, ignore=ignore)
+						else:
+							success = True
+						
+						if success:
+							log(f"({i+1}/{len(all_tags)}): Archived.")
+						else:
+							log(f"({i+1}/{len(all_tags)}): Failed to archive.")
 					
 					done.add(url)
 					
