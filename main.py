@@ -27,6 +27,10 @@ def try_request_soup(url, retries, log, user_agent):
 		
 		try:
 			page = urlopen(Request(url, headers={"User-Agent": user_agent}))
+			
+			if not page.headers.get("Content-Type", "text/html").strip().lower().startswith("text/"):
+				return False
+			
 			soup = BeautifulSoup(page.read())
 		except Exception as e:
 			log("Encountered", repr(e))
@@ -69,7 +73,8 @@ def archivePage(url, log, ignore=[], retries=3):
 	
 	return True
 
-def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore=[], quiet=False, verbose=False, dry_run=False, user_agent=USER_AGENT):
+DEFUALT_SCHEMES = ("http", "https", "ftp")
+def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore=[], quiet=False, verbose=False, dry_run=False, schemes=DEFUALT_SCHEMES, user_agent=USER_AGENT):
 	log = (lambda *args, **kwargs: None) if quiet else print
 	
 	stack = [base_url]
@@ -83,7 +88,8 @@ def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore=[],
 		soup = try_request_soup(page_url, retries, log, user_agent)
 		
 		if not soup:
-			log("Failed to request page after", retries, "tries")
+			if soup is None: log("Failed to request page after", retries, "tries")
+			elif soup is False: log("Resultant page was not text/html")
 			
 			continue
 		
@@ -93,7 +99,8 @@ def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore=[],
 			url = urljoin(base_url, tag["href"])
 			parsed = urlparse(url)
 			
-			if not parsed.netloc or parsed.netloc == base_url_parse.netloc:
+			if (not parsed.netloc or parsed.netloc == base_url_parse.netloc) and (not parsed.scheme or parsed.scheme in schemes) and \
+			   (not base_url.lower().startswith("tel:")):
 				url = url.split("#", 1)[0]
 				
 				if url not in done:
