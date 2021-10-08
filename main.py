@@ -74,7 +74,7 @@ def archivePage(url, log, ignore=[], retries=3):
 	return True
 
 DEFUALT_SCHEMES = ("http", "https", "ftp")
-def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore=[], quiet=False, verbose=False, dry_run=False, schemes=DEFUALT_SCHEMES, user_agent=USER_AGENT):
+def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore=[], quiet=False, verbose=False, dry_run=False, ignore_query=False, schemes=DEFUALT_SCHEMES, user_agent=USER_AGENT):
 	log = (lambda *args, **kwargs: None) if quiet else print
 	
 	stack = [base_url]
@@ -102,6 +102,7 @@ def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore=[],
 			if (not parsed.netloc or parsed.netloc == base_url_parse.netloc) and (not parsed.scheme or parsed.scheme in schemes) and \
 			   (not base_url.lower().startswith("tel:")):
 				url = url.split("#", 1)[0]
+				if ignore_query: url = url.split("?", 1)[0]
 				
 				if url not in done:
 					if not skip_done:
@@ -133,7 +134,7 @@ def archiveWebsite(base_url, as_index=False, retries=3, skip_to=None, ignore=[],
 							log("Did not add", url, "to stack")
 			#else:
 				#log("Did not archive external link:", url)
-		log("Completed archiving of URL", page_url)
+		log(f"({len(all_tags)}/{len(all_tags)}): Completed archiving of URL", page_url)
 
 if __name__ == "__main__":
 	from argparse import ArgumentParser
@@ -145,6 +146,7 @@ if __name__ == "__main__":
 	ap.add_argument("--retries", "-r", type=int, default=3, help="The number of retries before giving up on a URL")
 	ap.add_argument("--skip-to", "-s", default=None, help="A partial end to a path to skip to before we actually start archiving")
 	ap.add_argument("--ignore", "-I", type=str, default="", help="Comma-separated list of HTTP error codes to ignore from the Wayback Machine. Specifying \"any\" will ignore all error codes from the Wayback Machine.")
+	ap.add_argument("--ignore-query", "-Q", action="store_true", help="Ignores the query part of the URL.")
 	ap.add_argument("--quiet", "-q", action="store_true", help="Suppresses most output")
 	ap.add_argument("--verbose", "-v", action="store_true", help="Enables verbose output")
 	ap.add_argument("--dry-run", "-d", action="store_true", help="Doesn't actually archive the URLs")
@@ -157,4 +159,4 @@ if __name__ == "__main__":
 		assert not ignore or re.match(r"^\d+(,\d+)*$", ignore), "If specified, --ignore lists must be comma-separated values of integer error codes."
 		ignore = [int(code) for code in ignore.split(",")] if ignore else []
 	
-	archiveWebsite(args.base_url, as_index=args.index_page, retries=args.retries, skip_to=args.skip_to, ignore=ignore, quiet=args.quiet, verbose=args.verbose, dry_run=args.dry_run)
+	archiveWebsite(args.base_url, as_index=args.index_page, retries=args.retries, skip_to=args.skip_to, ignore=ignore, quiet=args.quiet, verbose=args.verbose, dry_run=args.dry_run, ignore_query=args.ignore_query)
