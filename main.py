@@ -7,7 +7,6 @@ import requests
 
 import time, re
 from urllib.parse import urlparse, urljoin
-from urllib.request import urlopen, Request
 
 USER_AGENT = "WebsiteArchiver/1.0 (Preserves websites on archive.org)"
 
@@ -26,12 +25,12 @@ def try_request_soup(url, retries, log, user_agent):
 		log("Requesting", url)
 		
 		try:
-			page = urlopen(Request(url, headers={"User-Agent": user_agent}))
+			page = requests.get(url, headers={"User-Agent": user_agent})
 			
 			if not page.headers.get("Content-Type", "text/html").strip().lower().startswith("text/"):
 				return False
 			
-			soup = BeautifulSoup(page.read())
+			soup = BeautifulSoup(page.text)
 		except Exception as e:
 			log("Encountered", repr(e))
 			continue
